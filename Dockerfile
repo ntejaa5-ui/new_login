@@ -16,7 +16,7 @@ ENV PYTHONPATH=${PYTHONPATH}:${PWD}
 
 # Set the environment variable for the application's port
 # (Be sure to replace '4200' with your application's specific port number if different)
-ENV PORT 4200
+ENV PORT 8080
 
 # Install 'serve', a static file serving package globally in the container
 RUN npm install -g serve
