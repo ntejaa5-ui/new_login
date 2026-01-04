@@ -200,6 +200,7 @@ const SupportPage = () => (
   </div>
 );
 
+/*
 // --- LOGIN COMPONENT ---
 const Login = () => {
   const navigate = useNavigate();
@@ -254,7 +255,7 @@ const Login = () => {
     </div>
   );
 };
-
+*/
 // --- HOME LAYOUT COMPONENT ---
 const Home = () => {
   const [isOnline, setIsOnline] = useState(true);
