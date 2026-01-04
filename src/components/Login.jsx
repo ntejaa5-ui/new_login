@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './Login.css'; 
+import './Login.css';
 
 const Login = () => {
   const [username, setUsername] = useState('');
@@ -9,6 +9,7 @@ const Login = () => {
   
   const navigate = useNavigate();
 
+  // Existing Standard Login Logic
   const handleLogin = (e) => {
     e.preventDefault();
     if (username === 'abc' && password === 'def') {
@@ -18,13 +19,24 @@ const Login = () => {
     }
   };
 
+  // DUMMY HANDLERS (To be replaced with Python API calls)
+  const handleGoogleLogin = () => {
+    console.log("DUMMY: Initiating Google Login...");
+    // TODO: Connect to Python backend API
+  };
+
+  const handlePhoneLogin = () => {
+    console.log("DUMMY: Initiating Phone Login...");
+    // TODO: Connect to Python backend API
+  };
+
   return (
     <div className="login-container">
       {/* LEFT SIDE */}
       <div className="left-panel">
         <div className="logo-section">
-          {/* Logo Placeholder */}
-          <h2 style={{color: '#333', fontWeight: 'bold'}}>MY LOGO</h2> 
+          {/* Logo updated as requested */}
+          <h2>Connect, Learn & Grow</h2> 
         </div>
 
         <div className="form-wrapper">
@@ -55,6 +67,29 @@ const Login = () => {
               {error && <p className="error-msg">{error}</p>}
 
               <button type="submit" className="login-btn">Sign in</button>
+
+              {/* Divider for Social Logins */}
+              <div className="divider">
+                <span>OR</span>
+              </div>
+
+              {/* Alternative Login Buttons */}
+              <div className="social-login-buttons">
+                <button 
+                  type="button" 
+                  className="social-btn google-btn"
+                  onClick={handleGoogleLogin}
+                >
+                  Sign in with Google
+                </button>
+                <button 
+                  type="button" 
+                  className="social-btn phone-btn"
+                  onClick={handlePhoneLogin}
+                >
+                  Sign in with Phone
+                </button>
+              </div>
             </form>
           </div>
         </div>
