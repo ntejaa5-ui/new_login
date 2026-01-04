@@ -16,7 +16,8 @@ import {
   X,
   CheckCircle,
   User,
-  ArrowRight
+  ArrowRight,
+  Smartphone // <--- ADDED THIS IMPORT
 } from 'lucide-react';
 
 // --- COMPONENTS SECTION ---
@@ -199,6 +200,7 @@ const SupportPage = () => (
     </div>
   </div>
 );
+
 // --- LOGIN COMPONENT ---
 const Login = () => {
   const navigate = useNavigate();
@@ -314,62 +316,7 @@ const Login = () => {
     </div>
   );
 };
-/*
-// --- LOGIN COMPONENT ---
-const Login = () => {
-  const navigate = useNavigate();
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    // Simulate login
-    navigate('/home');
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
-            ConnectLearnGrow
-          </h1>
-          <p className="text-gray-500 text-sm">Welcome back! Please login to continue.</p>
-        </div>
-
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
-            <input 
-              type="email" 
-              required 
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-              placeholder="you@example.com"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-            <input 
-              type="password" 
-              required 
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
-              placeholder="••••••••"
-            />
-          </div>
-          <button 
-            type="submit" 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition transform hover:scale-[1.02] shadow-md flex items-center justify-center gap-2"
-          >
-            Sign In <ArrowRight size={18} />
-          </button>
-        </form>
-
-        <div className="mt-6 text-center text-xs text-gray-500">
-          Don't have an account? <span className="text-blue-600 font-semibold cursor-pointer hover:underline">Sign up</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-*/
 // --- HOME LAYOUT COMPONENT ---
 const Home = () => {
   const [isOnline, setIsOnline] = useState(true);
