@@ -22,6 +22,8 @@ import {
   BookOpen,
   Plus,
   Loader
+  ,
+  Code
 } from 'lucide-react';
 
 // --- ROLE SELECTION COMPONENT (Moved into App.jsx for single-file simplicity) ---
