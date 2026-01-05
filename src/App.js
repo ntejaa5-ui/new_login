@@ -9,21 +9,48 @@ import {
   LogOut, 
   Settings, 
   Sparkles, 
-  Search,
-  Activity,
-  Clock,
-  Menu,
-  X,
-  CheckCircle,
-  User,
-  ArrowRight,
+  Search, 
+  Activity, 
+  Clock, 
+  Menu, 
+  X, 
+  CheckCircle, 
+  User, 
+  ArrowRight, 
   Smartphone,
-  Briefcase,
-  BookOpen,
-  Plus
+  Briefcase,  // Added
+  BookOpen,   // Added
+  Plus,       // Added
+  Loader,     // Added
+  Code,       // Added
+  Mail,       // Added
+  Lock,       // Added
+  ChevronLeft // Added
 } from 'lucide-react';
 
-// --- ROLE SELECTION COMPONENTS ---
+// --- HELPER: Gemini API Call ---
+const callGemini = async (prompt) => {
+  const apiKey = ""; // Injected by environment
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      }
+    );
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  } catch (error) {
+    console.error("AI Error:", error);
+    return null;
+  }
+};
+
+// --- ROLE SELECTION & VERIFICATION COMPONENTS ---
 
 const ArrowField = ({ label, icon: Icon, children }) => (
   <div className="flex items-start gap-4 mb-6 group">
@@ -41,13 +68,178 @@ const ArrowField = ({ label, icon: Icon, children }) => (
   </div>
 );
 
+const VerificationStep = ({ onVerified, roleColor = "blue" }) => {
+  const [method, setMethod] = useState(null); // 'phone' | 'email' | null
+  const [contact, setContact] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const themeColor = roleColor === 'green' ? 'text-green-600 bg-green-50 border-green-200' : 'text-blue-600 bg-blue-50 border-blue-200';
+  const buttonColor = roleColor === 'green' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700';
+
+  const handleGoogleSignup = () => {
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      onVerified();
+    }, 1500);
+  };
+
+  const handleSendOtp = (e) => {
+    e.preventDefault();
+    if (!contact) return;
+    setIsLoading(true);
+    setTimeout(() => {
+      setIsLoading(false);
+      setOtpSent(true);
+      alert(`Mock OTP sent to ${contact}: 1234`);
+    }, 1000);
+  };
+
+  const handleVerifyOtp = (e) => {
+    e.preventDefault();
+    if (otp === '1234') {
+      setIsLoading(true);
+      setTimeout(() => {
+        setIsLoading(false);
+        onVerified();
+      }, 1000);
+    } else {
+      alert("Invalid code. Please enter 1234.");
+    }
+  };
+
+  if (method) {
+    return (
+      <div className="mb-8 p-6 bg-gray-50 rounded-xl border border-gray-200 animate-fadeIn">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="font-bold text-gray-800 text-lg">Verify your {method === 'phone' ? 'Phone' : 'Email'}</h3>
+          <button 
+            type="button"
+            onClick={() => { setMethod(null); setOtpSent(false); setContact(''); }} 
+            className="text-xs text-gray-500 hover:underline flex items-center gap-1"
+          >
+            <ChevronLeft size={14} /> Back
+          </button>
+        </div>
+
+        {!otpSent ? (
+          <form onSubmit={handleSendOtp} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">{method === 'phone' ? 'Phone Number' : 'Email Address'}</label>
+              <div className="relative">
+                <input 
+                  type={method === 'phone' ? 'tel' : 'email'} 
+                  value={contact}
+                  onChange={(e) => setContact(e.target.value)}
+                  placeholder={method === 'phone' ? '+1 234 567 8900' : 'you@example.com'}
+                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                  required
+                />
+                <div className="absolute left-3 top-3.5 text-gray-400">
+                  {method === 'phone' ? <Smartphone size={18} /> : <Mail size={18} />}
+                </div>
+              </div>
+            </div>
+            <button type="submit" disabled={isLoading} className={`w-full ${buttonColor} text-white font-bold py-3 rounded-lg shadow-md transition flex justify-center items-center gap-2`}>
+              {isLoading ? <Loader size={18} className="animate-spin" /> : 'Send Verification Code'}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerifyOtp} className="space-y-4">
+            <p className="text-sm text-gray-600 bg-gray-100 p-3 rounded-lg">
+              Enter the code sent to <strong>{contact}</strong>
+            </p>
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Verification Code</label>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value)}
+                  placeholder="1234"
+                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 transition tracking-widest font-mono text-lg"
+                  required
+                />
+                <div className="absolute left-3 top-3.5 text-gray-400">
+                  <Lock size={18} />
+                </div>
+              </div>
+            </div>
+            <button type="submit" disabled={isLoading} className={`w-full ${buttonColor} text-white font-bold py-3 rounded-lg shadow-md transition flex justify-center items-center gap-2`}>
+              {isLoading ? <Loader size={18} className="animate-spin" /> : 'Verify & Continue'}
+            </button>
+          </form>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-8 space-y-5">
+      <div className="text-center mb-6">
+        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-50 text-blue-600 mb-3">
+          <User size={24} />
+        </div>
+        <h3 className="text-xl font-bold text-gray-800">Create your Account</h3>
+        <p className="text-sm text-gray-500">Choose a method to verify your identity.</p>
+      </div>
+
+      <button 
+        type="button"
+        onClick={handleGoogleSignup} 
+        disabled={isLoading} 
+        className="w-full bg-white border border-gray-300 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-50 transition flex items-center justify-center gap-3 shadow-sm"
+      >
+        {isLoading ? <Loader size={20} className="animate-spin text-gray-500" /> : (
+          <>
+            <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.26z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            Sign up with Google
+          </>
+        )}
+      </button>
+
+      <div className="relative my-4">
+        <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
+        <div className="relative flex justify-center text-xs"><span className="px-2 bg-white text-gray-500 uppercase font-medium">Or verify with</span></div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <button 
+          type="button"
+          onClick={() => setMethod('phone')} 
+          className={`flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed hover:border-solid hover:shadow-sm transition font-medium ${themeColor}`}
+        >
+          <Smartphone size={18} /> Phone
+        </button>
+        <button 
+          type="button"
+          onClick={() => setMethod('email')} 
+          className={`flex items-center justify-center gap-2 py-3 rounded-lg border border-dashed hover:border-solid hover:shadow-sm transition font-medium ${themeColor}`}
+        >
+          <Mail size={18} /> Email
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// --- TRAINER FORM ---
 const TrainerForm = () => {
-  const [techList, setTechList] = useState([]);
-  const [currentTech, setCurrentTech] = useState('');
+  const [isVerified, setIsVerified] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const navigate = useNavigate();
 
+  // State for Form Data
+  const [fullName, setFullName] = useState('');
+  const [designation, setDesignation] = useState('');
+  const [experience, setExperience] = useState('');
+  const [techList, setTechList] = useState([]);
+  const [currentTech, setCurrentTech] = useState('');
+
   const addTech = (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     if (currentTech.trim() && !techList.includes(currentTech.trim())) {
       setTechList([...techList, currentTech.trim()]);
       setCurrentTech('');
@@ -58,70 +250,163 @@ const TrainerForm = () => {
     setTechList(techList.filter(t => t !== techToRemove));
   };
 
-  const handleSubmit = (e) => {
+  const handleAiSuggest = async () => {
+    if (!designation) return alert("Please enter a designation first!");
+    setIsAiLoading(true);
+    const prompt = `List 5 top technical skills or technologies for a "${designation}". Return ONLY the skills separated by commas, no numbering.`;
+    const result = await callGemini(prompt);
+    if (result) {
+      const skills = result.split(',').map(s => s.trim());
+      const newSkills = skills.filter(s => !techList.includes(s));
+      setTechList([...techList, ...newSkills]);
+    }
+    setIsAiLoading(false);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    alert('Trainer Details Submitted!');
-    navigate('/home');
+
+    // 1. Create JSON Document
+    const trainerData = {
+      role: 'trainer',
+      fullName: fullName,
+      designation: designation,
+      experienceYears: experience,
+      skills: techList,
+      verifiedAt: new Date().toISOString()
+    };
+
+    console.log("Submitting Document:", trainerData);
+
+    try {
+      // -------------------------------------------------------------------------------------------
+      // [MONGODB] SEND REQUEST TO YOUR BACKEND API HERE
+      // REPLACE THE URL BELOW WITH YOUR ACTUAL BACKEND ENDPOINT (e.g., Node.js/Express or Python/Flask)
+      // DO NOT put MongoDB credentials directly here in the frontend code.
+      // -------------------------------------------------------------------------------------------
+      
+      /* const response = await fetch('https://your-backend-api.com/api/users/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // 'Authorization': `Bearer ${firebaseToken}` // If using Firebase Auth
+        },
+        body: JSON.stringify(trainerData)
+      });
+      
+      if (!response.ok) throw new Error('Failed to save to MongoDB');
+      */
+
+      alert('Trainer Profile Created Successfully!');
+      navigate('/home');
+    } catch (error) {
+      console.error("Submission Error:", error);
+      alert("Failed to create profile.");
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <ArrowField label="Full Name" icon={User}>
-        <input type="text" placeholder="e.g. Jane Doe" className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" required />
-      </ArrowField>
-      <ArrowField label="Designation" icon={Briefcase}>
-        <input type="text" placeholder="e.g. Senior Software Engineer" className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" required />
-      </ArrowField>
-      <ArrowField label="Experience" icon={Clock}>
-        <div className="flex items-center gap-2">
-          <input type="number" placeholder="5" className="w-24 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" required />
-          <span className="text-gray-500">Years</span>
-        </div>
-      </ArrowField>
-      <ArrowField label="Technologies" icon={CodeIconWrapper}>
-        <div className="space-y-3">
-          <div className="flex gap-2">
+    <div>
+      {!isVerified ? (
+        <VerificationStep onVerified={() => setIsVerified(true)} roleColor="blue" />
+      ) : (
+        <form onSubmit={handleSubmit} className="animate-fadeIn">
+          <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-lg flex items-center gap-2 text-sm border border-green-100">
+            <CheckCircle size={18} /> 
+            <span className="font-semibold">Verified Account.</span> Please complete your profile.
+          </div>
+
+          <ArrowField label="Full Name" icon={User}>
             <input 
               type="text" 
-              value={currentTech} 
-              onChange={(e) => setCurrentTech(e.target.value)} 
-              placeholder="Add tech (e.g. React, Python)" 
-              className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" 
-              onKeyPress={(e) => e.key === 'Enter' && addTech(e)} 
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="e.g. Jane Doe" 
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition" 
+              required 
             />
-            <button onClick={addTech} type="button" className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-lg transition">
-              <Plus size={20} />
+          </ArrowField>
+          
+          <ArrowField label="Designation" icon={Briefcase}>
+            <input 
+              type="text" 
+              value={designation} 
+              onChange={(e) => setDesignation(e.target.value)} 
+              placeholder="e.g. Senior Software Engineer" 
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition" 
+              required 
+            />
+          </ArrowField>
+          
+          <ArrowField label="Experience" icon={Clock}>
+            <div className="flex items-center gap-2">
+              <input 
+                type="number" 
+                value={experience}
+                onChange={(e) => setExperience(e.target.value)}
+                placeholder="5" 
+                className="w-24 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition" 
+                required 
+              />
+              <span className="text-gray-500">Years</span>
+            </div>
+          </ArrowField>
+          
+          <ArrowField label="Technologies" icon={Code}>
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={currentTech} 
+                  onChange={(e) => setCurrentTech(e.target.value)} 
+                  placeholder="Add tech (e.g. React, Python)" 
+                  className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition" 
+                  onKeyPress={(e) => e.key === 'Enter' && addTech(e)} 
+                />
+                <button type="button" onClick={addTech} className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-lg transition">
+                  <Plus size={20} />
+                </button>
+              </div>
+              <div className="flex justify-end">
+                <button type="button" onClick={handleAiSuggest} disabled={isAiLoading || !designation} className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-full transition ${isAiLoading ? 'bg-blue-100 text-blue-400 cursor-wait' : designation ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow hover:scale-105' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+                  {isAiLoading ? <Loader size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  {isAiLoading ? 'Generating...' : 'Auto-fill Skills'}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {techList.map((tech) => (
+                  <span key={tech} className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                    {tech} <button type="button" onClick={() => removeTech(tech)} className="hover:text-blue-900"><X size={14} /></button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </ArrowField>
+          <div className="mt-8 flex justify-end">
+            <button type="submit" className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition flex items-center gap-2">
+              Submit Profile <CheckCircle size={20} />
             </button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {techList.map((tech) => (
-              <span key={tech} className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-                {tech}
-                <button type="button" onClick={() => removeTech(tech)} className="hover:text-blue-900">
-                  <X size={14} />
-                </button>
-              </span>
-            ))}
-            {techList.length === 0 && <span className="text-xs text-gray-400 italic">No technologies added yet.</span>}
-          </div>
-        </div>
-      </ArrowField>
-      <div className="mt-8 flex justify-end">
-        <button type="submit" className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition flex items-center gap-2">
-          Submit Profile <CheckCircle size={20} />
-        </button>
-      </div>
-    </form>
+        </form>
+      )}
+    </div>
   );
 };
 
+// --- LEARNER FORM ---
 const LearnerForm = () => {
-  const [interestList, setInterestList] = useState([]);
-  const [currentInterest, setCurrentInterest] = useState('');
+  const [isVerified, setIsVerified] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Form State
+  const [fullName, setFullName] = useState('');
+  const [currentRole, setCurrentRole] = useState('');
+  const [interestList, setInterestList] = useState([]);
+  const [currentInterest, setCurrentInterest] = useState('');
+
   const addInterest = (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     if (currentInterest.trim() && !interestList.includes(currentInterest.trim())) {
       setInterestList([...interestList, currentInterest.trim()]);
       setCurrentInterest('');
@@ -132,57 +417,128 @@ const LearnerForm = () => {
     setInterestList(interestList.filter(i => i !== item));
   };
 
-  const handleSubmit = (e) => {
+  const handleAiRecommend = async () => {
+    if (!currentRole) return alert("Please enter your current role first!");
+    setIsAiLoading(true);
+    const prompt = `List 5 key skills for a "${currentRole}". Return ONLY the topics separated by commas.`;
+    const result = await callGemini(prompt);
+    if (result) {
+      const topics = result.split(',').map(s => s.trim());
+      const newTopics = topics.filter(t => !interestList.includes(t));
+      setInterestList([...interestList, ...newTopics]);
+    }
+    setIsAiLoading(false);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    alert('Learner Preferences Submitted!');
-    navigate('/home');
+
+    // 1. Create JSON Document
+    const learnerData = {
+      role: 'learner',
+      fullName: fullName,
+      currentRole: currentRole,
+      interests: interestList,
+      verifiedAt: new Date().toISOString()
+    };
+
+    console.log("Submitting Document:", learnerData);
+
+    try {
+      // -------------------------------------------------------------------------------------------
+      // [MONGODB] SEND REQUEST TO YOUR BACKEND API HERE
+      // REPLACE THE URL BELOW WITH YOUR ACTUAL BACKEND ENDPOINT
+      // -------------------------------------------------------------------------------------------
+      
+      /* const response = await fetch('https://your-backend-api.com/api/users/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(learnerData)
+      });
+      if (!response.ok) throw new Error('Failed to save to MongoDB');
+      */
+
+      alert('Learner Profile Created Successfully!');
+      navigate('/home');
+    } catch (error) {
+      console.error("Submission Error:", error);
+      alert("Failed to create profile.");
+    }
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <ArrowField label="Your Name" icon={User}>
-        <input type="text" placeholder="e.g. John Smith" className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition" required />
-      </ArrowField>
-      <ArrowField label="Current Role" icon={Briefcase}>
-        <input type="text" placeholder="e.g. Student / Junior Dev" className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition" required />
-      </ArrowField>
-      <ArrowField label="To Learn" icon={BookOpen}>
-        <div className="space-y-3">
-          <div className="flex gap-2">
+    <div>
+      {!isVerified ? (
+        <VerificationStep onVerified={() => setIsVerified(true)} roleColor="green" />
+      ) : (
+        <form onSubmit={handleSubmit} className="animate-fadeIn">
+          <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-lg flex items-center gap-2 text-sm border border-green-100">
+            <CheckCircle size={18} /> 
+            <span className="font-semibold">Verified Account.</span> Tell us your goals.
+          </div>
+
+          <ArrowField label="Your Name" icon={User}>
             <input 
               type="text" 
-              value={currentInterest} 
-              onChange={(e) => setCurrentInterest(e.target.value)} 
-              placeholder="What do you want to learn?" 
-              className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition" 
-              onKeyPress={(e) => e.key === 'Enter' && addInterest(e)} 
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="e.g. John Smith" 
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition" 
+              required 
             />
-            <button onClick={addInterest} type="button" className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-lg transition">
-              <Plus size={20} />
+          </ArrowField>
+          
+          <ArrowField label="Current Role" icon={Briefcase}>
+            <input 
+              type="text" 
+              value={currentRole} 
+              onChange={(e) => setCurrentRole(e.target.value)} 
+              placeholder="e.g. Student" 
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition" 
+              required 
+            />
+          </ArrowField>
+          
+          <ArrowField label="To Learn" icon={BookOpen}>
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={currentInterest} 
+                  onChange={(e) => setCurrentInterest(e.target.value)} 
+                  placeholder="What do you want to learn?" 
+                  className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition" 
+                  onKeyPress={(e) => e.key === 'Enter' && addInterest(e)} 
+                />
+                <button type="button" onClick={addInterest} className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-lg transition"><Plus size={20} /></button>
+              </div>
+              <div className="flex justify-end">
+                <button type="button" onClick={handleAiRecommend} disabled={isAiLoading || !currentRole} className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-full transition ${isAiLoading ? 'bg-green-100 text-green-400 cursor-wait' : currentRole ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white shadow hover:scale-105' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+                  {isAiLoading ? <Loader size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                  {isAiLoading ? 'Thinking...' : 'Recommend Path'}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {interestList.map((item) => (
+                  <span key={item} className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                    {item} <button type="button" onClick={() => removeInterest(item)} className="hover:text-green-900"><X size={14} /></button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          </ArrowField>
+          <div className="mt-8 flex justify-end">
+            <button type="submit" className="bg-green-600 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:bg-green-700 transition flex items-center gap-2">
+              Start Learning <CheckCircle size={20} />
             </button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {interestList.map((item) => (
-              <span key={item} className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-                {item}
-                <button type="button" onClick={() => removeInterest(item)} className="hover:text-green-900">
-                  <X size={14} />
-                </button>
-              </span>
-            ))}
-            {interestList.length === 0 && <span className="text-xs text-gray-400 italic">Add skills you want to learn.</span>}
-          </div>
-        </div>
-      </ArrowField>
-      <div className="mt-8 flex justify-end">
-        <button type="submit" className="bg-green-600 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:bg-green-700 transition flex items-center gap-2">
-          Start Learning <CheckCircle size={20} />
-        </button>
-      </div>
-    </form>
+        </form>
+      )}
+    </div>
   );
 };
 
+// --- MAIN ROLE SELECTION COMPONENT ---
 const RoleSelection = () => {
   const [selectedRole, setSelectedRole] = useState(null); // 'trainer' | 'learner' | null
   const navigate = useNavigate();
@@ -202,7 +558,7 @@ const RoleSelection = () => {
             onClick={(e) => { e.stopPropagation(); handleBackToLogin(); }}
             className="absolute top-6 left-6 flex items-center gap-2 text-gray-500 hover:text-gray-900 transition font-medium z-10"
           >
-            <ArrowRight className="rotate-180" size={20} /> Back to Login
+            <ChevronLeft size={20} /> Back to Login
           </button>
 
           <div className="bg-white p-6 rounded-full shadow-md mb-6 group-hover:scale-110 transition-transform">
@@ -244,7 +600,7 @@ const RoleSelection = () => {
           onClick={handleBack}
           className="mb-6 flex items-center gap-2 text-gray-600 hover:text-gray-900 transition font-medium"
         >
-          <ArrowRight className="rotate-180" size={20} /> Back to Selection
+          <ChevronLeft size={20} /> Back to Selection
         </button>
 
         <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
@@ -266,29 +622,8 @@ const RoleSelection = () => {
   );
 };
 
-// Use Code icon alias for the form to avoid conflict if any
-const CodeIconWrapper = ({ size, className }) => (
-  // Simple SVG or use an existing icon as a placeholder for "Code" if 'Code' icon isn't directly exported or to ensure no conflict
-  <svg 
-    xmlns="http://www.w3.org/2000/svg" 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke="currentColor" 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-  >
-    <polyline points="16 18 22 12 16 6" />
-    <polyline points="8 6 2 12 8 18" />
-  </svg>
-);
+// --- HOME PAGE & OTHER COMPONENTS ---
 
-// --- MAIN COMPONENTS SECTION ---
-
-// 1. HomePage Component
 const HomePage = () => {
   const tasks = [
     { id: 1, title: 'Upcoming Mentorship Session', time: '10:00 AM', type: 'meeting' },
@@ -298,7 +633,6 @@ const HomePage = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      {/* Center Search Bar */}
       <div className="bg-white/90 backdrop-blur rounded-xl p-6 shadow-sm border border-gray-100 text-center">
         <h2 className="text-xl font-bold text-gray-800 mb-1">What do you want to learn today?</h2>
         <p className="text-gray-500 text-xs mb-4">Search for mentors, skills, or community discussions.</p>
@@ -315,9 +649,7 @@ const HomePage = () => {
         </div>
       </div>
 
-      {/* Widgets */}
       <div className="grid md:grid-cols-3 gap-4">
-        {/* Daily Overview */}
         <div className="col-span-2 bg-white/90 backdrop-blur rounded-xl p-5 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-bold text-gray-800 flex items-center gap-2">
@@ -345,7 +677,6 @@ const HomePage = () => {
           </div>
         </div>
 
-        {/* Quick Connect Panel */}
         <div className="bg-gradient-to-b from-blue-600 to-indigo-700 rounded-xl p-5 text-white shadow-lg flex flex-col justify-between">
           <div>
             <h3 className="text-lg font-bold mb-1">Grow Network</h3>
@@ -365,7 +696,6 @@ const HomePage = () => {
   );
 };
 
-// 2. ConnectPage Component
 const ConnectPage = () => (
   <div className="max-w-5xl mx-auto bg-white/90 backdrop-blur rounded-xl p-8 shadow-sm border border-gray-100 min-h-[500px]">
     <div className="flex items-center justify-between mb-6">
@@ -387,7 +717,6 @@ const ConnectPage = () => (
   </div>
 );
 
-// 3. ChatPage Component
 const ChatPage = () => (
   <div className="max-w-5xl mx-auto bg-white/90 backdrop-blur rounded-xl shadow-sm border border-gray-100 h-[600px] flex overflow-hidden">
     <div className="w-1/3 border-r border-gray-100 bg-gray-50 p-4">
@@ -416,7 +745,6 @@ const ChatPage = () => (
   </div>
 );
 
-// 4. SubscriptionPage Component
 const SubscriptionPage = () => (
   <div className="max-w-3xl mx-auto bg-white/90 backdrop-blur rounded-xl p-8 shadow-sm border border-gray-100">
     <h2 className="text-2xl font-bold text-gray-800 mb-2">Subscription Plans</h2>
@@ -444,7 +772,6 @@ const SubscriptionPage = () => (
   </div>
 );
 
-// 5. SupportPage Component
 const SupportPage = () => (
   <div className="max-w-3xl mx-auto bg-white/90 backdrop-blur rounded-xl p-8 shadow-sm border border-gray-100 min-h-[500px]">
     <h2 className="text-2xl font-bold text-gray-800 mb-2">Help & Support</h2>
