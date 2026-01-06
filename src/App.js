@@ -833,33 +833,68 @@ const ConnectPage = () => (
   </div>
 );
 
-const ChatPage = () => (
-  <div className="max-w-5xl mx-auto bg-white/90 backdrop-blur rounded-xl shadow-sm border border-gray-100 h-[600px] flex overflow-hidden">
-    <div className="w-1/3 border-r border-gray-100 bg-gray-50 p-4">
-      <div className="mb-4">
-        <input type="text" placeholder="Search chats..." className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-blue-500" />
+
+// --- UPDATED CHAT PAGE TO FETCH FROM BACKEND ---
+const ChatPage = () => {
+  const [conversations, setConversations] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchChats = async () => {
+      try {
+        // REPLACE WITH YOUR BACKEND URL (Hardcoded for dev/preview)
+        // Ensure your backend server is running and accessible
+        const response = await fetch('http://localhost:5000/api/chat/list'); 
+        if (response.ok) {
+          const data = await response.json();
+          setConversations(data);
+        }
+      } catch (error) {
+        console.error("Error loading chats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChats();
+  }, []);
+
+  return (
+    <div className="max-w-5xl mx-auto bg-white/90 backdrop-blur rounded-xl shadow-sm border border-gray-100 h-[600px] flex overflow-hidden">
+      <div className="w-1/3 border-r border-gray-100 bg-gray-50 p-4">
+        <div className="mb-4">
+          <input type="text" placeholder="Search chats..." className="w-full px-3 py-2 rounded-lg border border-gray-200 text-xs focus:outline-none focus:border-blue-500" />
+        </div>
+        <div className="space-y-2">
+          {loading ? (
+            <div className="text-center text-gray-400 text-xs py-4">Loading conversations...</div>
+          ) : conversations.length > 0 ? (
+            conversations.map((chat) => (
+              <div key={chat.sid} className="p-3 bg-white rounded-lg border border-gray-100 hover:shadow-sm cursor-pointer flex gap-3 items-center">
+                <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-xs">
+                  {chat.friendlyName ? chat.friendlyName.substring(0, 2).toUpperCase() : 'CH'}
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-gray-800">{chat.friendlyName || 'Untitled Chat'}</div>
+                  <div className="text-xs text-gray-400">Click to view messages</div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="text-center text-gray-400 text-xs py-4">No conversations found.</div>
+          )}
+        </div>
       </div>
-      <div className="space-y-2">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="p-3 bg-white rounded-lg border border-gray-100 hover:shadow-sm cursor-pointer flex gap-3 items-center">
-            <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-            <div>
-              <div className="h-3 w-20 bg-gray-200 rounded mb-1"></div>
-              <div className="h-2 w-12 bg-gray-100 rounded"></div>
-            </div>
-          </div>
-        ))}
+      <div className="flex-1 flex flex-col items-center justify-center bg-white p-8">
+        <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 text-blue-500">
+          <MessageSquare size={32} />
+        </div>
+        <h3 className="text-lg font-bold text-gray-800 mb-2">Your Messages</h3>
+        <p className="text-gray-400 text-sm text-center">Select a conversation from the left to start chatting.</p>
       </div>
     </div>
-    <div className="flex-1 flex flex-col items-center justify-center bg-white p-8">
-      <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 text-blue-500">
-        <MessageSquare size={32} />
-      </div>
-      <h3 className="text-lg font-bold text-gray-800 mb-2">Your Messages</h3>
-      <p className="text-gray-400 text-sm text-center">Select a conversation from the left to start chatting.</p>
-    </div>
-  </div>
-);
+  );
+};
 
 const SubscriptionPage = () => (
   <div className="max-w-3xl mx-auto bg-white/90 backdrop-blur rounded-xl p-8 shadow-sm border border-gray-100">
