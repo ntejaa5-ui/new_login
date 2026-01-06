@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { 
   Home as HomeIcon, 
@@ -18,19 +18,23 @@ import {
   User, 
   ArrowRight, 
   Smartphone,
-  Briefcase,  // Added
-  BookOpen,   // Added
-  Plus,       // Added
-  Loader,     // Added
-  Code,       // Added
-  Mail,       // Added
-  Lock,       // Added
-  ChevronLeft // Added
+  Briefcase,
+  BookOpen,
+  Plus,
+  Loader,
+  Code,
+  Mail,
+  Lock,
+  ChevronLeft,
+  Globe
 } from 'lucide-react';
+// Import Firebase Auth
+import { signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+import { auth, googleProvider } from './firebase';
 
 // --- HELPER: Gemini API Call ---
 const callGemini = async (prompt) => {
-  const apiKey = ""; // Injected by environment
+  const apiKey = "YOUR_GEMINI_API_KEY"; // Replace with your actual key
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
@@ -71,42 +75,124 @@ const ArrowField = ({ label, icon: Icon, children }) => (
 const VerificationStep = ({ onVerified, roleColor = "blue" }) => {
   const [method, setMethod] = useState(null); // 'phone' | 'email' | null
   const [contact, setContact] = useState('');
+  const [countryCode, setCountryCode] = useState('+91'); // Default Region
   const [otpSent, setOtpSent] = useState(false);
   const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Firebase specific state
+  const [confirmationResult, setConfirmationResult] = useState(null);
 
   const themeColor = roleColor === 'green' ? 'text-green-600 bg-green-50 border-green-200' : 'text-blue-600 bg-blue-50 border-blue-200';
   const buttonColor = roleColor === 'green' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700';
 
-  const handleGoogleSignup = () => {
+  // --- GOOGLE AUTH ---
+  const handleGoogleSignup = async () => {
     setIsLoading(true);
-    setTimeout(() => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      console.log("Google User:", user);
+      onVerified(user);
+    } catch (error) {
+      console.error("Google Auth Error:", error);
+      alert(error.message);
+    } finally {
       setIsLoading(false);
-      onVerified();
-    }, 1500);
+    }
   };
 
-  const handleSendOtp = (e) => {
+  // --- PHONE AUTH CONFIG ---
+  useEffect(() => {
+    if (method === 'phone') {
+      if (!window.recaptchaVerifier) {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          'size': 'invisible',
+          'callback': (response) => {
+            // reCAPTCHA solved
+          }
+        });
+      }
+    }
+  }, [method]);
+
+  // --- SEND OTP (Phone or Email) ---
+  const handleSendOtp = async (e) => {
     e.preventDefault();
     if (!contact) return;
     setIsLoading(true);
-    setTimeout(() => {
+
+    try {
+      if (method === 'phone') {
+        // Firebase Phone Auth
+        const phoneNumber = `${countryCode}${contact}`;
+        const appVerifier = window.recaptchaVerifier;
+        
+        const confirmation = await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+        setConfirmationResult(confirmation);
+        setOtpSent(true);
+        alert(`OTP sent to ${phoneNumber}`);
+      } else {
+        // Email Auth (Custom Backend for "PIN" requirement)
+        // Since Firebase client doesn't send "PINs" to email, we call our backend
+        /* const response = await fetch('YOUR_BACKEND_URL/api/send-email-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: contact })
+        });
+        if (!response.ok) throw new Error('Failed to send OTP');
+        */
+        
+        // Simulating Backend Call for Demo
+        setTimeout(() => {
+          setOtpSent(true);
+          alert(`Simulated: OTP '1234' sent to ${contact}. (Implement backend logic for real email PINs)`);
+        }, 1500);
+      }
+    } catch (error) {
+      console.error("Send OTP Error:", error);
+      alert("Failed to send verification code. " + error.message);
+    } finally {
       setIsLoading(false);
-      setOtpSent(true);
-      alert(`Mock OTP sent to ${contact}: 1234`);
-    }, 1000);
+    }
   };
 
-  const handleVerifyOtp = (e) => {
+  // --- VERIFY OTP ---
+  const handleVerifyOtp = async (e) => {
     e.preventDefault();
-    if (otp === '1234') {
-      setIsLoading(true);
-      setTimeout(() => {
-        setIsLoading(false);
-        onVerified();
-      }, 1000);
-    } else {
-      alert("Invalid code. Please enter 1234.");
+    setIsLoading(true);
+
+    try {
+      if (method === 'phone') {
+        // Verify Firebase Phone OTP
+        const result = await confirmationResult.confirm(otp);
+        const user = result.user;
+        onVerified(user);
+      } else {
+        // Verify Email PIN (Backend Call)
+        /* const response = await fetch('YOUR_BACKEND_URL/api/verify-email-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: contact, otp })
+        });
+        const data = await response.json();
+        if (data.verified) onVerified({ email: contact, uid: data.uid });
+        */
+
+        // Simulating Backend Verification
+        if (otp === '1234') {
+           setTimeout(() => {
+             onVerified({ email: contact, uid: 'simulated-email-uid-' + Date.now() });
+           }, 1000);
+        } else {
+          alert("Invalid code. Please enter 1234.");
+          setIsLoading(false);
+        }
+      }
+    } catch (error) {
+      console.error("Verify Error:", error);
+      alert("Verification failed. " + error.message);
+      setIsLoading(false);
     }
   };
 
@@ -117,7 +203,7 @@ const VerificationStep = ({ onVerified, roleColor = "blue" }) => {
           <h3 className="font-bold text-gray-800 text-lg">Verify your {method === 'phone' ? 'Phone' : 'Email'}</h3>
           <button 
             type="button"
-            onClick={() => { setMethod(null); setOtpSent(false); setContact(''); }} 
+            onClick={() => { setMethod(null); setOtpSent(false); setContact(''); setConfirmationResult(null); }} 
             className="text-xs text-gray-500 hover:underline flex items-center gap-1"
           >
             <ChevronLeft size={14} /> Back
@@ -127,21 +213,46 @@ const VerificationStep = ({ onVerified, roleColor = "blue" }) => {
         {!otpSent ? (
           <form onSubmit={handleSendOtp} className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">{method === 'phone' ? 'Phone Number' : 'Email Address'}</label>
-              <div className="relative">
-                <input 
-                  type={method === 'phone' ? 'tel' : 'email'} 
-                  value={contact}
-                  onChange={(e) => setContact(e.target.value)}
-                  placeholder={method === 'phone' ? '+1 234 567 8900' : 'you@example.com'}
-                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-                  required
-                />
-                <div className="absolute left-3 top-3.5 text-gray-400">
-                  {method === 'phone' ? <Smartphone size={18} /> : <Mail size={18} />}
+              <label className="block text-xs font-semibold text-gray-500 mb-1">
+                {method === 'phone' ? 'Region & Number' : 'Email Address'}
+              </label>
+              
+              <div className="flex gap-2">
+                {method === 'phone' && (
+                  <div className="relative w-1/3">
+                     <div className="absolute left-2 top-3.5 text-gray-400 pointer-events-none">
+                       <Globe size={16} />
+                     </div>
+                     <select 
+                       value={countryCode}
+                       onChange={(e) => setCountryCode(e.target.value)}
+                       className="w-full pl-8 pr-2 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+                     >
+                       <option value="+1">🇺🇸 +1</option>
+                       <option value="+91">🇮🇳 +91</option>
+                       <option value="+44">🇬🇧 +44</option>
+                       <option value="+61">🇦🇺 +61</option>
+                     </select>
+                  </div>
+                )}
+                <div className="relative flex-1">
+                  <input 
+                    type={method === 'phone' ? 'tel' : 'email'} 
+                    value={contact}
+                    onChange={(e) => setContact(e.target.value)}
+                    placeholder={method === 'phone' ? '98765 43210' : 'you@example.com'}
+                    className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                    required
+                  />
+                  <div className="absolute left-3 top-3.5 text-gray-400">
+                    {method === 'phone' ? <Smartphone size={18} /> : <Mail size={18} />}
+                  </div>
                 </div>
               </div>
             </div>
+            
+            <div id="recaptcha-container"></div>
+
             <button type="submit" disabled={isLoading} className={`w-full ${buttonColor} text-white font-bold py-3 rounded-lg shadow-md transition flex justify-center items-center gap-2`}>
               {isLoading ? <Loader size={18} className="animate-spin" /> : 'Send Verification Code'}
             </button>
@@ -149,16 +260,16 @@ const VerificationStep = ({ onVerified, roleColor = "blue" }) => {
         ) : (
           <form onSubmit={handleVerifyOtp} className="space-y-4">
             <p className="text-sm text-gray-600 bg-gray-100 p-3 rounded-lg">
-              Enter the code sent to <strong>{contact}</strong>
+              Enter the code sent to <strong>{method === 'phone' ? `${countryCode} ${contact}` : contact}</strong>
             </p>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Verification Code</label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Verification PIN</label>
               <div className="relative">
                 <input 
                   type="text" 
                   value={otp}
                   onChange={(e) => setOtp(e.target.value)}
-                  placeholder="1234"
+                  placeholder="123456"
                   className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-500 transition tracking-widest font-mono text-lg"
                   required
                 />
@@ -228,6 +339,7 @@ const VerificationStep = ({ onVerified, roleColor = "blue" }) => {
 // --- TRAINER FORM ---
 const TrainerForm = () => {
   const [isVerified, setIsVerified] = useState(false);
+  const [firebaseUser, setFirebaseUser] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -266,8 +378,10 @@ const TrainerForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // 1. Create JSON Document
+    // 1. Create JSON Document including Firebase Auth UID
     const trainerData = {
+      uid: firebaseUser?.uid, // From Firebase
+      email: firebaseUser?.email || firebaseUser?.phoneNumber, // Contact info
       role: 'trainer',
       fullName: fullName,
       designation: designation,
@@ -276,26 +390,16 @@ const TrainerForm = () => {
       verifiedAt: new Date().toISOString()
     };
 
-    console.log("Submitting Document:", trainerData);
+    console.log("Submitting Document to Backend:", trainerData);
 
     try {
-      // -------------------------------------------------------------------------------------------
-      // [MONGODB] SEND REQUEST TO YOUR BACKEND API HERE
-      // REPLACE THE URL BELOW WITH YOUR ACTUAL BACKEND ENDPOINT (e.g., Node.js/Express or Python/Flask)
-      // DO NOT put MongoDB credentials directly here in the frontend code.
-      // -------------------------------------------------------------------------------------------
-      
+      // REPLACE WITH YOUR ACTUAL BACKEND ENDPOINT
       /* const response = await fetch('https://your-backend-api.com/api/users/create', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          // 'Authorization': `Bearer ${firebaseToken}` // If using Firebase Auth
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(trainerData)
       });
-      
-      if (!response.ok) throw new Error('Failed to save to MongoDB');
-      */
+      if (!response.ok) throw new Error('Failed to save to DB'); */
 
       alert('Trainer Profile Created Successfully!');
       navigate('/home');
@@ -308,12 +412,19 @@ const TrainerForm = () => {
   return (
     <div>
       {!isVerified ? (
-        <VerificationStep onVerified={() => setIsVerified(true)} roleColor="blue" />
+        <VerificationStep 
+          onVerified={(user) => {
+            setFirebaseUser(user);
+            setIsVerified(true);
+            if(user.displayName) setFullName(user.displayName);
+          }} 
+          roleColor="blue" 
+        />
       ) : (
         <form onSubmit={handleSubmit} className="animate-fadeIn">
           <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-lg flex items-center gap-2 text-sm border border-green-100">
             <CheckCircle size={18} /> 
-            <span className="font-semibold">Verified Account.</span> Please complete your profile.
+            <span className="font-semibold">Account Verified.</span> Please complete your profile.
           </div>
 
           <ArrowField label="Full Name" icon={User}>
@@ -396,6 +507,7 @@ const TrainerForm = () => {
 // --- LEARNER FORM ---
 const LearnerForm = () => {
   const [isVerified, setIsVerified] = useState(false);
+  const [firebaseUser, setFirebaseUser] = useState(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -435,6 +547,8 @@ const LearnerForm = () => {
 
     // 1. Create JSON Document
     const learnerData = {
+      uid: firebaseUser?.uid,
+      email: firebaseUser?.email || firebaseUser?.phoneNumber,
       role: 'learner',
       fullName: fullName,
       currentRole: currentRole,
@@ -445,18 +559,13 @@ const LearnerForm = () => {
     console.log("Submitting Document:", learnerData);
 
     try {
-      // -------------------------------------------------------------------------------------------
-      // [MONGODB] SEND REQUEST TO YOUR BACKEND API HERE
-      // REPLACE THE URL BELOW WITH YOUR ACTUAL BACKEND ENDPOINT
-      // -------------------------------------------------------------------------------------------
-      
+      // REPLACE WITH YOUR BACKEND URL
       /* const response = await fetch('https://your-backend-api.com/api/users/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(learnerData)
       });
-      if (!response.ok) throw new Error('Failed to save to MongoDB');
-      */
+      if (!response.ok) throw new Error('Failed to save to MongoDB'); */
 
       alert('Learner Profile Created Successfully!');
       navigate('/home');
@@ -469,12 +578,19 @@ const LearnerForm = () => {
   return (
     <div>
       {!isVerified ? (
-        <VerificationStep onVerified={() => setIsVerified(true)} roleColor="green" />
+        <VerificationStep 
+          onVerified={(user) => {
+            setFirebaseUser(user);
+            setIsVerified(true);
+            if(user.displayName) setFullName(user.displayName);
+          }} 
+          roleColor="green" 
+        />
       ) : (
         <form onSubmit={handleSubmit} className="animate-fadeIn">
           <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-lg flex items-center gap-2 text-sm border border-green-100">
             <CheckCircle size={18} /> 
-            <span className="font-semibold">Verified Account.</span> Tell us your goals.
+            <span className="font-semibold">Account Verified.</span> Tell us your goals.
           </div>
 
           <ArrowField label="Your Name" icon={User}>
@@ -811,14 +927,12 @@ const Login = () => {
     }
   };
 
-  const handleGoogleLogin = () => {
-    console.log("DUMMY: Initiating Google Login...");
-    // TODO: Connect to Python API
-  };
-
-  const handlePhoneLogin = () => {
-    console.log("DUMMY: Initiating Phone Login...");
-    // TODO: Connect to Python API
+  const handleGoogleLogin = async () => {
+    console.log("Initiating Google Login...");
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if(result.user) navigate('/home');
+    } catch(e) { console.error(e); }
   };
 
   return (
@@ -894,7 +1008,7 @@ const Login = () => {
 
           <button 
             type="button"
-            onClick={handlePhoneLogin}
+            onClick={() => navigate('/signup')}
             className="w-full bg-white border border-gray-200 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-50 transition flex items-center justify-center gap-3 shadow-sm text-sm"
           >
             <Smartphone size={20} className="text-gray-600" />
