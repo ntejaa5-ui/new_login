@@ -9,24 +9,67 @@ const Login = () => {
   
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const API_URL ='http://localhost:8080';
+
+  async function callSignInAPI(payload) {
+    const res = await fetch(`${API_URL}/api/auth/signin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (username === 'abc' && password === 'def') {
+    try {
+      // Map local username/password to a payload your backend expects.
+      const payload = {
+        firebase_uid: `local-${username}`, // or real uid if available
+        email: `${username}@example.com`,
+        display_name: username,
+        photo_url: null
+      };
+      await callSignInAPI(payload);
       navigate('/home');
-    } else {
-      setError('Invalid username or password');
+    } catch (err) {
+      setError('Sign-in failed: ' + (err.message || 'unknown error'));
     }
   };
 
-  // DUMMY HANDLERS
-  const handleGoogleLogin = () => {
-    console.log("DUMMY: Initiating Google Login...");
-    // TODO: Call Python API for Google Auth
+  const handleGoogleLogin = async () => {
+    try {
+      // Replace with real Google OAuth flow to get firebase_uid/email/display_name/photo_url
+      const googleUser = {
+        firebase_uid: 'google-uid-123',
+        email: 'user@example.com',
+        display_name: 'Google User',
+        photo_url: 'https://example.com/avatar.png'
+      };
+      await callSignInAPI(googleUser);
+      navigate('/home');
+    } catch (err) {
+      setError('Google sign-in failed');
+      console.error(err);
+    }
   };
 
-  const handlePhoneLogin = () => {
-    console.log("DUMMY: Initiating Phone Login...");
-    // TODO: Call Python API for Phone/OTP Auth
+  const handlePhoneLogin = async () => {
+    try {
+      // Replace with real phone auth flow to get firebase_uid/email/display_name/photo_url
+      const phoneUser = {
+        firebase_uid: 'phone-uid-123',
+        email: null,
+        display_name: 'Phone User',
+        photo_url: null
+      };
+      await callSignInAPI(phoneUser);
+      navigate('/home');
+    } catch (err) {
+      setError('Phone sign-in failed');
+      console.error(err);
+    }
   };
 
   return (

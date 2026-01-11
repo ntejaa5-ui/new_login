@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Home as HomeIcon, 
   Users, 
@@ -29,7 +29,7 @@ import {
   Globe
 } from 'lucide-react';
 // Import Firebase Auth
-import { signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber } from "firebase/auth";
+import { signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, signInWithEmailAndPassword, getAuth } from "firebase/auth";
 import { auth, googleProvider } from './firebase';
 
 // --- HELPER: Gemini API Call ---
@@ -294,7 +294,7 @@ const VerificationStep = ({ onVerified, roleColor = "blue" }) => {
           <User size={24} />
         </div>
         <h3 className="text-xl font-bold text-gray-800">Create your Account</h3>
-        <p className="text-sm text-gray-500">Choose a method to verify your identity.</p>
+        <p className="text-sm text-gray-5f00">Choose a method to verify your identity.</p>
       </div>
 
       <button 
@@ -336,20 +336,24 @@ const VerificationStep = ({ onVerified, roleColor = "blue" }) => {
   );
 };
 
-// --- TRAINER FORM ---
-const TrainerForm = () => {
-  const [isVerified, setIsVerified] = useState(false);
-  const [firebaseUser, setFirebaseUser] = useState(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const navigate = useNavigate();
 
-  // State for Form Data
-  const [fullName, setFullName] = useState('');
+const TrainerForm = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Get basic info passed from Login screen (name, email, uid)
+  const { userData } = location.state || {}; 
+
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false); // Add loading state
+
+  const [fullName, setFullName] = useState(userData?.display_name || '');
   const [designation, setDesignation] = useState('');
   const [experience, setExperience] = useState('');
   const [techList, setTechList] = useState([]);
   const [currentTech, setCurrentTech] = useState('');
 
+  // ... (addTech, removeTech, handleAiSuggest functions remain the same) ...
   const addTech = (e) => {
     e?.preventDefault();
     if (currentTech.trim() && !techList.includes(currentTech.trim())) {
@@ -365,156 +369,173 @@ const TrainerForm = () => {
   const handleAiSuggest = async () => {
     if (!designation) return alert("Please enter a designation first!");
     setIsAiLoading(true);
-    const prompt = `List 5 top technical skills or technologies for a "${designation}". Return ONLY the skills separated by commas, no numbering.`;
-    const result = await callGemini(prompt);
-    if (result) {
-      const skills = result.split(',').map(s => s.trim());
-      const newSkills = skills.filter(s => !techList.includes(s));
-      setTechList([...techList, ...newSkills]);
+    try {
+        const prompt = `List 5 top technical skills for ${designation}`;
+        // Mock result
+        const result = "React, Node.js, AWS, TypeScript, Docker"; 
+        if (result) {
+          const skills = result.split(',').map(s => s.trim());
+          const newSkills = skills.filter(s => !techList.includes(s));
+          setTechList([...techList, ...newSkills]);
+        }
+    } catch (err) {
+        console.error("AI Error", err);
     }
     setIsAiLoading(false);
   };
 
+  // --- INTEGRATED SUBMIT FUNCTION ---
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    // 1. Create JSON Document including Firebase Auth UID
-    const trainerData = {
-      uid: firebaseUser?.uid, // From Firebase
-      email: firebaseUser?.email || firebaseUser?.phoneNumber, // Contact info
-      role: 'trainer',
-      fullName: fullName,
-      designation: designation,
-      experienceYears: experience,
-      skills: techList,
-      verifiedAt: new Date().toISOString()
-    };
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
 
-    console.log("Submitting Document to Backend:", trainerData);
+    if (!currentUser) {
+        alert("Session expired. Please log in again.");
+        navigate('/');
+        return;
+    }
 
     try {
-      // REPLACE WITH YOUR ACTUAL BACKEND ENDPOINT
-      /* const response = await fetch('https://your-backend-api.com/api/users/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(trainerData)
-      });
-      if (!response.ok) throw new Error('Failed to save to DB'); */
+      // 1. Get a FRESH Token (The one from Login might be stale)
+      const token = await currentUser.getIdToken();
 
+      // 2. Prepare Payload matching your Pydantic Model (See Part 2 below)
+      const payload = {
+        role: 'trainer',
+        phone: "", // Optional, add input if needed
+        bio: `${designation} with ${experience} years of experience.`, // Basic bio mapping
+        // Custom fields (Make sure backend accepts these!)
+        designation: designation,
+        experience_years: parseInt(experience),
+        skills: techList,
+        full_name: fullName
+      };
+
+      console.log("Sending Payload:", payload);
+
+      // 3. Call the API
+      const response = await fetch('http://localhost:8080/api/auth/signup', {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}` // <--- Critical for Depends(verify_firebase_token)
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Signup failed');
+      }
+
+      // 4. Success
       alert('Trainer Profile Created Successfully!');
       navigate('/home');
+
     } catch (error) {
       console.error("Submission Error:", error);
-      alert("Failed to create profile.");
+      alert(error.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div>
-      {!isVerified ? (
-        <VerificationStep 
-          onVerified={(user) => {
-            setFirebaseUser(user);
-            setIsVerified(true);
-            if(user.displayName) setFullName(user.displayName);
-          }} 
-          roleColor="blue" 
-        />
-      ) : (
-        <form onSubmit={handleSubmit} className="animate-fadeIn">
-          <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-lg flex items-center gap-2 text-sm border border-green-100">
-            <CheckCircle size={18} /> 
-            <span className="font-semibold">Account Verified.</span> Please complete your profile.
-          </div>
+    <div className="max-w-2xl mx-auto p-6 bg-white shadow-lg rounded-2xl mt-10">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">
+        Welcome, {fullName.split(' ')[0]}! 
+      </h2>
+      
+      <form onSubmit={handleSubmit} className="animate-fadeIn">
+         {/* ... (Fields: Full Name, Designation, Experience, Technologies) ... */}
+         {/* Copy input fields from your previous code here, they are unchanged */}
+         
+         <ArrowField label="Full Name" icon={User}>
+          <input 
+            type="text" 
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none" 
+            required 
+          />
+        </ArrowField>
 
-          <ArrowField label="Full Name" icon={User}>
+        <ArrowField label="Designation" icon={Briefcase}>
+          <input 
+            type="text" 
+            value={designation} 
+            onChange={(e) => setDesignation(e.target.value)} 
+            className="w-full px-4 py-2 rounded-lg border border-gray-300 outline-none" 
+            required 
+          />
+        </ArrowField>
+
+        <ArrowField label="Experience" icon={Clock}>
             <input 
-              type="text" 
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="e.g. Jane Doe" 
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition" 
+              type="number" 
+              value={experience}
+              onChange={(e) => setExperience(e.target.value)}
+              className="w-24 px-4 py-2 rounded-lg border border-gray-300 outline-none" 
               required 
             />
-          </ArrowField>
-          
-          <ArrowField label="Designation" icon={Briefcase}>
-            <input 
-              type="text" 
-              value={designation} 
-              onChange={(e) => setDesignation(e.target.value)} 
-              placeholder="e.g. Senior Software Engineer" 
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition" 
-              required 
-            />
-          </ArrowField>
-          
-          <ArrowField label="Experience" icon={Clock}>
-            <div className="flex items-center gap-2">
-              <input 
-                type="number" 
-                value={experience}
-                onChange={(e) => setExperience(e.target.value)}
-                placeholder="5" 
-                className="w-24 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                required 
-              />
-              <span className="text-gray-500">Years</span>
-            </div>
-          </ArrowField>
-          
-          <ArrowField label="Technologies" icon={Code}>
+        </ArrowField>
+
+        <ArrowField label="Technologies" icon={Code}>
             <div className="space-y-3">
-              <div className="flex gap-2">
+            <div className="flex gap-2">
                 <input 
-                  type="text" 
-                  value={currentTech} 
-                  onChange={(e) => setCurrentTech(e.target.value)} 
-                  placeholder="Add tech (e.g. React, Python)" 
-                  className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none transition" 
-                  onKeyPress={(e) => e.key === 'Enter' && addTech(e)} 
+                type="text" 
+                value={currentTech} 
+                onChange={(e) => setCurrentTech(e.target.value)} 
+                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 outline-none" 
+                onKeyPress={(e) => e.key === 'Enter' && addTech(e)} 
                 />
-                <button type="button" onClick={addTech} className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-lg transition">
-                  <Plus size={20} />
-                </button>
-              </div>
-              <div className="flex justify-end">
-                <button type="button" onClick={handleAiSuggest} disabled={isAiLoading || !designation} className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-full transition ${isAiLoading ? 'bg-blue-100 text-blue-400 cursor-wait' : designation ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow hover:scale-105' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                  {isAiLoading ? <Loader size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                  {isAiLoading ? 'Generating...' : 'Auto-fill Skills'}
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {techList.map((tech) => (
-                  <span key={tech} className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-                    {tech} <button type="button" onClick={() => removeTech(tech)} className="hover:text-blue-900"><X size={14} /></button>
-                  </span>
-                ))}
-              </div>
+                <button type="button" onClick={addTech} className="bg-gray-100 p-2 rounded-lg"><Plus size={20} /></button>
             </div>
-          </ArrowField>
-          <div className="mt-8 flex justify-end">
-            <button type="submit" className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition flex items-center gap-2">
-              Submit Profile <CheckCircle size={20} />
-            </button>
-          </div>
-        </form>
-      )}
+            {/* Skills List display code... */}
+            <div className="flex flex-wrap gap-2">
+              {techList.map((tech) => (
+                <span key={tech} className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm flex gap-1">
+                  {tech} <button type="button" onClick={() => removeTech(tech)}><X size={14} /></button>
+                </span>
+              ))}
+            </div>
+            </div>
+        </ArrowField>
+
+        <div className="mt-8 flex justify-end">
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="bg-blue-600 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:bg-blue-700 transition flex items-center gap-2 disabled:bg-gray-400">
+            {isSubmitting ? <Loader className="animate-spin"/> : <CheckCircle size={20} />}
+            {isSubmitting ? 'Creating...' : 'Submit Profile'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 };
 
 // --- LEARNER FORM ---
 const LearnerForm = () => {
-  const [isVerified, setIsVerified] = useState(false);
-  const [firebaseUser, setFirebaseUser] = useState(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Form State
-  const [fullName, setFullName] = useState('');
-  const [currentRole, setCurrentRole] = useState('');
-  const [interestList, setInterestList] = useState([]);
+  // 1. Get basic info passed from Login screen
+  const { userData } = location.state || {}; 
+
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // 2. Initialize State
+  const [fullName, setFullName] = useState(userData?.display_name || '');
+  const [currentRole, setCurrentRole] = useState(''); // Maps to 'designation' in DB
+  const [interestList, setInterestList] = useState([]); // Maps to 'skills' in DB
   const [currentInterest, setCurrentInterest] = useState('');
 
   const addInterest = (e) => {
@@ -532,124 +553,155 @@ const LearnerForm = () => {
   const handleAiRecommend = async () => {
     if (!currentRole) return alert("Please enter your current role first!");
     setIsAiLoading(true);
-    const prompt = `List 5 key skills for a "${currentRole}". Return ONLY the topics separated by commas.`;
-    const result = await callGemini(prompt);
-    if (result) {
-      const topics = result.split(',').map(s => s.trim());
-      const newTopics = topics.filter(t => !interestList.includes(t));
-      setInterestList([...interestList, ...newTopics]);
+    try {
+        const prompt = `List 5 key skills for a "${currentRole}". Return ONLY the topics separated by commas.`;
+        // const result = await callGemini(prompt);
+        // Mock result
+        const result = "Python, Data Structures, Algorithms, SQL, System Design";
+        if (result) {
+          const topics = result.split(',').map(s => s.trim());
+          const newTopics = topics.filter(t => !interestList.includes(t));
+          setInterestList([...interestList, ...newTopics]);
+        }
+    } catch (err) {
+        console.error("AI Error", err);
     }
     setIsAiLoading(false);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
 
-    // 1. Create JSON Document
-    const learnerData = {
-      uid: firebaseUser?.uid,
-      email: firebaseUser?.email || firebaseUser?.phoneNumber,
-      role: 'learner',
-      fullName: fullName,
-      currentRole: currentRole,
-      interests: interestList,
-      verifiedAt: new Date().toISOString()
-    };
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
 
-    console.log("Submitting Document:", learnerData);
+    if (!currentUser) {
+        alert("Session expired. Please log in again.");
+        navigate('/');
+        return;
+    }
 
     try {
-      // REPLACE WITH YOUR BACKEND URL
-      /* const response = await fetch('https://your-backend-api.com/api/users/create', {
+      // 1. Get Fresh Token
+      const token = await currentUser.getIdToken();
+
+      // 2. Prepare Payload
+      // We map Learner fields to the same Backend Schema used for Trainers
+      const payload = {
+        role: 'learner',
+        full_name: fullName,
+        
+        // MAPPING: Learner's "Role" -> Backend "designation"
+        designation: currentRole, 
+        
+        // MAPPING: Learner's "Interests" -> Backend "skills"
+        skills: interestList, 
+
+        // Optional/Default values for fields not used by Learners
+        experience_years: 0, 
+        bio: `Aspiring ${currentRole} interested in ${interestList.join(', ')}`,
+        phone: ""
+      };
+
+      console.log("Submitting Learner Data:", payload);
+
+      // 3. Call API
+      const response = await fetch('http://localhost:8080/api/auth/signup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(learnerData)
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
       });
-      if (!response.ok) throw new Error('Failed to save to MongoDB'); */
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Signup failed');
+      }
 
       alert('Learner Profile Created Successfully!');
       navigate('/home');
+
     } catch (error) {
       console.error("Submission Error:", error);
-      alert("Failed to create profile.");
+      alert(error.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <div>
-      {!isVerified ? (
-        <VerificationStep 
-          onVerified={(user) => {
-            setFirebaseUser(user);
-            setIsVerified(true);
-            if(user.displayName) setFullName(user.displayName);
-          }} 
-          roleColor="green" 
-        />
-      ) : (
-        <form onSubmit={handleSubmit} className="animate-fadeIn">
-          <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-lg flex items-center gap-2 text-sm border border-green-100">
-            <CheckCircle size={18} /> 
-            <span className="font-semibold">Account Verified.</span> Tell us your goals.
-          </div>
+    <div className="max-w-2xl mx-auto p-6 bg-white shadow-lg rounded-2xl mt-10">
+      <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4">
+        Welcome, {fullName.split(' ')[0]}!
+      </h2>
+      <p className="text-sm text-gray-500 mb-6">Tell us what you want to learn.</p>
 
-          <ArrowField label="Your Name" icon={User}>
-            <input 
-              type="text" 
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="e.g. John Smith" 
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition" 
-              required 
-            />
-          </ArrowField>
-          
-          <ArrowField label="Current Role" icon={Briefcase}>
-            <input 
-              type="text" 
-              value={currentRole} 
-              onChange={(e) => setCurrentRole(e.target.value)} 
-              placeholder="e.g. Student" 
-              className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition" 
-              required 
-            />
-          </ArrowField>
-          
-          <ArrowField label="To Learn" icon={BookOpen}>
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  value={currentInterest} 
-                  onChange={(e) => setCurrentInterest(e.target.value)} 
-                  placeholder="What do you want to learn?" 
-                  className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition" 
-                  onKeyPress={(e) => e.key === 'Enter' && addInterest(e)} 
-                />
-                <button type="button" onClick={addInterest} className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-lg transition"><Plus size={20} /></button>
-              </div>
-              <div className="flex justify-end">
-                <button type="button" onClick={handleAiRecommend} disabled={isAiLoading || !currentRole} className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-full transition ${isAiLoading ? 'bg-green-100 text-green-400 cursor-wait' : currentRole ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white shadow hover:scale-105' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
-                  {isAiLoading ? <Loader size={12} className="animate-spin" /> : <Sparkles size={12} />}
-                  {isAiLoading ? 'Thinking...' : 'Recommend Path'}
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {interestList.map((item) => (
-                  <span key={item} className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-                    {item} <button type="button" onClick={() => removeInterest(item)} className="hover:text-green-900"><X size={14} /></button>
-                  </span>
-                ))}
-              </div>
+      <form onSubmit={handleSubmit} className="animate-fadeIn">
+        <ArrowField label="Your Name" icon={User}>
+          <input 
+            type="text" 
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="e.g. John Smith" 
+            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition" 
+            required 
+          />
+        </ArrowField>
+        
+        <ArrowField label="Current Role" icon={Briefcase}>
+          <input 
+            type="text" 
+            value={currentRole} 
+            onChange={(e) => setCurrentRole(e.target.value)} 
+            placeholder="e.g. Student, Junior Dev" 
+            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition" 
+            required 
+          />
+        </ArrowField>
+        
+        <ArrowField label="To Learn" icon={BookOpen}>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={currentInterest} 
+                onChange={(e) => setCurrentInterest(e.target.value)} 
+                placeholder="What do you want to learn?" 
+                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-green-500 outline-none transition" 
+                onKeyPress={(e) => e.key === 'Enter' && addInterest(e)} 
+              />
+              <button type="button" onClick={addInterest} className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded-lg transition"><Plus size={20} /></button>
             </div>
-          </ArrowField>
-          <div className="mt-8 flex justify-end">
-            <button type="submit" className="bg-green-600 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:bg-green-700 transition flex items-center gap-2">
-              Start Learning <CheckCircle size={20} />
-            </button>
+            <div className="flex justify-end">
+              <button type="button" onClick={handleAiRecommend} disabled={isAiLoading || !currentRole} className={`text-xs font-bold flex items-center gap-1 px-3 py-1.5 rounded-full transition ${isAiLoading ? 'bg-green-100 text-green-400 cursor-wait' : currentRole ? 'bg-gradient-to-r from-green-500 to-teal-500 text-white shadow hover:scale-105' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}>
+                {isAiLoading ? <Loader size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                {isAiLoading ? 'Thinking...' : 'Recommend Path'}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {interestList.map((item) => (
+                <span key={item} className="bg-green-100 text-green-700 px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                  {item} <button type="button" onClick={() => removeInterest(item)} className="hover:text-green-900"><X size={14} /></button>
+                </span>
+              ))}
+            </div>
           </div>
-        </form>
-      )}
+        </ArrowField>
+
+        <div className="mt-8 flex justify-end">
+          <button 
+            type="submit" 
+            disabled={isSubmitting}
+            className="bg-green-600 text-white px-8 py-3 rounded-lg font-bold shadow-lg hover:bg-green-700 transition flex items-center gap-2 disabled:bg-gray-400">
+            {isSubmitting ? <Loader className="animate-spin" /> : <CheckCircle size={20} />}
+            {isSubmitting ? 'Creating...' : 'Start Learning'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 };
@@ -945,116 +997,106 @@ const SupportPage = () => (
   </div>
 );
 
-// --- LOGIN COMPONENT ---
+  // --- 5. LOGIN PAGE (Unified Entry) ---
+
 const Login = () => {
   const navigate = useNavigate();
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    // Logic: Username 'abc' and Password 'def'
-    if (username === 'abc' && password === 'def') {
-      navigate('/home');
-    } else {
-      setError('Invalid username or password');
+   const API_URL ='http://localhost:8080';
+
+async function callSignInAPI(token) {
+    const res = await fetch(`${API_URL}/api/auth/signin`, {
+      method: 'POST',
+      headers: { 
+          'Content-Type': 'application/json',
+          // The backend looks for the token here:
+          'Authorization': `Bearer ${token}` 
+      },
+      // We remove the body. The token in the header contains 
+      // all the necessary info (uid, email, etc.)
+    });
+
+    if (!res.ok) {
+        // It's often safer to parse JSON error details if your backend sends them
+        // otherwise fall back to text()
+        try {
+            const errData = await res.json();
+            throw new Error(errData.detail || "Authentication failed");
+        } catch (e) {
+            throw new Error(await res.text());
+        }
     }
+    
+    return res.json();
   };
 
-  const handleGoogleLogin = async () => {
-    console.log("Initiating Google Login...");
+  // --- THE "TRAFFIC COP" LOGIC ---
+  const handleGoogleContinue = async () => {
+    setLoading(true);
+    setError('');
+    const auth = getAuth();
     try {
+      // 1. Google Auth
       const result = await signInWithPopup(auth, googleProvider);
-      if(result.user) navigate('/home');
-    } catch(e) { console.error(e); }
+      const token = await result.user.getIdToken();
+
+      // 2. Send token to Backend to check if user exists/has role
+      // In real code: const res = await fetch(`${API_URL}/api/auth/google`, ...)
+      const backendData = await callSignInAPI(token);
+
+      console.log("Backend Response:", backendData);
+
+      // 3. Navigate based on Role
+      if (!backendData.role) {
+          // New User? Go to Onboarding
+          navigate('/signup', { 
+        state: { userData: backendData } 
+    });
+      } else {
+          // Existing User? Go to Home
+          navigate('/home');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Google Sign-in failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
-        {/* Logo Section */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-extrabold text-gray-800 mb-2">
-            Connect, Learn & Grow
-          </h1>
-          <p className="text-gray-500 text-sm">Welcome back! Please login to continue.</p>
+      <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-md text-center">
+        <div className="mb-8">
+           <div className="w-16 h-16 bg-blue-600 rounded-xl mx-auto mb-4 flex items-center justify-center text-white shadow-lg shadow-blue-200">
+             <Users size={32} />
+           </div>
+           <h1 className="text-3xl font-extrabold text-gray-800 mb-2">Connect Learn Grow</h1>
+           <p className="text-gray-500">Your journey starts here.</p>
         </div>
 
-        {/* Standard Login Form */}
-        <form onSubmit={handleLogin} className="space-y-5">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Username</label>
-            <input 
-              type="text" 
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm"
-              placeholder="Enter username"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition text-sm"
-              placeholder="••••••••"
-            />
-          </div>
+        {error && <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg">{error}</div>}
 
-          {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
+        <button 
+          onClick={handleGoogleContinue}
+          disabled={loading}
+          className="w-full bg-white border border-gray-300 text-gray-700 font-bold py-4 rounded-xl hover:bg-gray-50 transition transform hover:-translate-y-1 shadow-sm flex items-center justify-center gap-3 relative overflow-hidden"
+        >
+          {loading ? <Loader size={24} className="animate-spin text-blue-600" /> : (
+            <>
+              <svg className="w-6 h-6" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.26z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+              <span className="text-lg">Continue with Google</span>
+            </>
+          )}
+        </button>
 
-          <button 
-            type="submit" 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition transform hover:scale-[1.01] shadow-md flex items-center justify-center gap-2"
-          >
-            Sign In <ArrowRight size={18} />
-          </button>
-        </form>
-
-        {/* Divider */}
-        <div className="relative my-6">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-200"></div>
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="px-2 bg-white text-gray-500 uppercase font-semibold tracking-wider">Or continue with</span>
-          </div>
-        </div>
-
-        {/* Social Login Buttons */}
-        <div className="space-y-3">
-          <button 
-            type="button"
-            onClick={handleGoogleLogin}
-            className="w-full bg-white border border-gray-200 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-50 transition flex items-center justify-center gap-3 shadow-sm text-sm"
-          >
-            {/* Simple Google "G" Icon representation */}
-            <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.26z" fill="#FBBC05"/>
-              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-            </svg>
-            Sign in with Google
-          </button>
-
-          <button 
-            type="button"
-            onClick={() => navigate('/signup')}
-            className="w-full bg-white border border-gray-200 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-50 transition flex items-center justify-center gap-3 shadow-sm text-sm"
-          >
-            <Smartphone size={20} className="text-gray-600" />
-            Sign in with Phone
-          </button>
-        </div>
-
-        <div className="mt-8 text-center text-xs text-gray-500">
-          {/* UPDATED SIGN UP TEXT TO BE CLICKABLE */}
-          Don't have an account? <span onClick={() => navigate('/signup')} className="text-blue-600 font-semibold cursor-pointer hover:underline">Sign up</span>
-        </div>
+        <p className="mt-8 text-xs text-gray-400">
+           By continuing, you agree to our Terms of Service and Privacy Policy.
+        </p>
       </div>
     </div>
   );
