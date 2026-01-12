@@ -417,7 +417,7 @@ const TrainerForm = () => {
       console.log("Sending Payload:", payload);
 
       // 3. Call the API
-      const response = await fetch('http://localhost:8080/api/auth/signup', {
+      const response = await fetch('https://connectlearngrow23-75285205083.asia-south1.run.app/api/auth/signup', {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
@@ -607,7 +607,7 @@ const LearnerForm = () => {
       console.log("Submitting Learner Data:", payload);
 
       // 3. Call API
-      const response = await fetch('http://localhost:8080/api/auth/signup', {
+      const response = await fetch('https://connectlearngrow23-75285205083.asia-south1.run.app/api/auth/signup', {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
@@ -1006,7 +1006,7 @@ const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
-   const API_URL ='http://localhost:8080';
+   const API_URL ='https://connectlearngrow23-75285205083.asia-south1.run.app';
 
 async function callSignInAPI(token) {
     const res = await fetch(`${API_URL}/api/auth/signin`, {
