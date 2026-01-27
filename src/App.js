@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ChatPage from './pages/home/ChatPage';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Home as HomeIcon, 
@@ -1201,6 +1202,7 @@ function App() {
         {/* ADDED SIGNUP ROUTE */}
         <Route path="/signup" element={<RoleSelection />} />
         <Route path="/home" element={<Home />} />
+        <Route path="/chat" element={<ChatPage />} />
       </Routes>
     </Router>
   );
