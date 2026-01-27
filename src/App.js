@@ -886,13 +886,13 @@ const ConnectPage = () => (
   </div>
 );
 
-
+/*
 // --- UPDATED CHAT PAGE TO FETCH FROM BACKEND ---
-const ChatPage = () => {
-  const [conversations, setConversations] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
+#const ChatPage = () => {
+ #const [conversations, setConversations] = useState([]);
+  #const [loading, setLoading] = useState(true);
+"""
+useEffect(() => {
     const fetchChats = async () => {
       try {
         // REPLACE WITH YOUR BACKEND URL (Hardcoded for dev/preview)
@@ -948,7 +948,7 @@ const ChatPage = () => {
     </div>
   );
 };
-
+*/
 const SubscriptionPage = () => (
   <div className="max-w-3xl mx-auto bg-white/90 backdrop-blur rounded-xl p-8 shadow-sm border border-gray-100">
     <h2 className="text-2xl font-bold text-gray-800 mb-2">Subscription Plans</h2>
