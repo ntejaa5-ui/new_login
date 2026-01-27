@@ -1,6 +1,7 @@
 // src/firebase.js
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getFirestore } from "firebase/firestore"; // 1. ADD THIS IMPORT
 
 const firebaseConfig = {
   apiKey: "AIzaSyBNvRTEp2DTD91hhon-U5QMTUDxjkhr0vs",
@@ -12,8 +13,11 @@ const firebaseConfig = {
   measurementId: "G-K710NC1CWE"
 };
 
-
 const app = initializeApp(firebaseConfig);
+
+// 2. INITIALIZE AND EXPORT DB
+export const db = getFirestore(app); 
+
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export default app;
